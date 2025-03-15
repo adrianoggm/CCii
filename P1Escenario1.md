@@ -133,6 +133,30 @@ docker run --detach \
   --volume /home/adrianoggm/redisdata:/data \
   redis:latest
 ```
+Una vez completada la instalación, podemos configurar LDAP en OwnCloud siguiendo estos pasos:
+
+1. **Iniciar sesión:**  
+   Accedemos a OwnCloud con el usuario `admin` y la contraseña definida (en este ejemplo, `adminpassword`).  
+   > *Nota*: En algunas imágenes de OwnCloud, el módulo de LDAP viene preinstalado. Si no es tu caso, instálalo desde el *Marketplace* de OwnCloud.
+
+2. **Acceder a la configuración de LDAP:**  
+   Desde el perfil de administrador, navegamos a **Settings** (Configuración) > **User Authentication** (Autenticación de usuarios) y seleccionamos la opción **LDAP**.
+
+3. **Configurar OpenLDAP:**  
+   Rellenamos los campos correspondientes a nuestro servidor LDAP (dirección, DN base, credenciales de administrador, etc.).  
+   Cuando aparezca la marca verde (*check*), significa que la comunicación entre OwnCloud y OpenLDAP se ha establecido correctamente.
+
+**Vista de la cuenta de OwnCloud de `admin` configurando LDAP:**  
+![Owncloud](/P1/images/Ldapconfig.png)
+
+4. **Probar el acceso con usuarios LDAP:**  
+   Tras la configuración, podemos iniciar sesión con los usuarios creados en LDAP, por ejemplo, `juanitoggm`. Para verificar la persistencia y el correcto funcionamiento de la integración, subimos una imagen de la armadura de Zinogre a su espacio de OwnCloud.
+
+**Vista de la cuenta de OwnCloud de `juanitoggm`:**  
+![Owncloud](/P1/images/owncloudpesc1.png)
+
+Con estos pasos, tu entorno OwnCloud conectado a OpenLDAP estará completamente operativo.
+
 ## Usando Docker-compose
 Para simplificar el proceso anterior, se preparó un archivo docker-compose (docker-compose1.yml) ubicado en el directorio Escenario1. Docker Compose facilita la configuración y gestión simultánea de múltiples contenedores.
 
@@ -388,7 +412,12 @@ change-passwords:
 ```
 
 ## Resultado 
+Tras ejecutar los comandos del make como start1 o restart1 y configurado los servicios de ldap con su init y ldap-add y su change-passwords podremos ver el siguiente despliegue de contenedores realizando un docker ps.
+
+**Vista de los contenedores desplegados:**  
+![Docker ps](/P1/images/escenario1dockerps.png)  
+
 Con esto podemos entrar mediante la  ip designada del servidor en el puerto 20270 el servicio owncloud  y si entramos en la cuenta juanitoggm con contraseña juanito podremos ver una imagen subida de una armudura de zinogre que comprueba la presistencia de todo.
 
-Imagen de la cuenta de owncloud de Juanitoggm conn la imagen subida.
-![MV](/P1/images/owncloudpesc1.png)  
+**Vista de la cuenta de OwnCloud de `juanitoggm`:**  
+![Owncloud](/P1/images/owncloudpesc1.png)  
