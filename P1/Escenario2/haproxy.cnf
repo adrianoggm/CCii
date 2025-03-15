@@ -20,8 +20,8 @@ frontend stats
 
 # Frontend principal para OwnCloud
 frontend owncloud_frontend
-  bind *:20268  # HTTP
-  bind *:20269 ssl crt /etc/ssl/certs/haproxy.pem  # HTTPS
+  bind *:8080  # HTTP
+  bind *:463 ssl crt /etc/ssl/certs/haproxy.pem  # HTTPS
   default_backend owncloud_backend
 
 # Backend con balanceo roundrobin entre las 2 réplicas

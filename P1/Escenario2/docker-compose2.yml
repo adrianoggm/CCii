@@ -21,7 +21,7 @@ services:
     container_name: owncloud_haproxy
     restart: always
     ports:
-      - "20268:80"   # HTTP
+      - "20268:8080"   # HTTP
       - "20269:443"  # HTTPS
       - "20267:20267" # HAProxy stats
     volumes:
