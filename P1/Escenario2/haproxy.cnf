@@ -1,0 +1,31 @@
+global
+  log stdout format raw local0 info
+
+# Configuración por defecto
+defaults
+  mode http
+  log global
+  timeout connect 15s
+  timeout client 20s
+  timeout server 20s
+  timeout http-request 20s
+  option httplog
+
+# Interfaz de estadísticas de HAProxy
+frontend stats
+  bind *:20267
+  stats enable
+  stats uri /
+  stats refresh 10s
+
+# Frontend principal para OwnCloud
+frontend owncloud_frontend
+  bind *:20268  # HTTP
+  bind *:20269 ssl crt /etc/ssl/certs/haproxy.pem  # HTTPS
+  default_backend owncloud_backend
+
+# Backend con balanceo roundrobin entre las 2 réplicas
+backend owncloud_backend
+  balance roundrobin
+  server owncloud1 owncloud1:8080 check inter 2s fall 3 rise 2
+  server owncloud2 owncloud2:8080 check inter 2s fall 3 rise 2

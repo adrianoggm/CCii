@@ -1,0 +1,179 @@
+version: "3.8"
+
+
+volumes:
+  files:
+    driver: local
+  mysql:
+    driver: local
+  redis:
+    driver: local
+  ldap-data:
+    driver: local
+  ldap-config:
+    driver: local
+  haproxy-certs:
+    driver: local  # Volumen para los certificados de HAProxy
+
+services:
+  haproxy:
+    image: haproxy:latest
+    container_name: owncloud_haproxy
+    restart: always
+    ports:
+      - "20268:80"   # HTTP
+      - "20269:443"  # HTTPS
+      - "20267:20267" # HAProxy stats
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy/certs/haproxy.pem:/etc/ssl/certs/haproxy.pem:ro  # Certificado SSL
+    depends_on:
+      - owncloud1
+      - owncloud2
+    networks:
+      - owncloud_net_docker
+
+  owncloud1:
+    image: owncloud/server:${OWNCLOUD_VERSION}
+    container_name: owncloud1
+    restart: always
+    ports:
+      - "20262:8080"  # HTTP OwnCloud (acceso directo, opcional)
+    depends_on:
+      - mariadb
+      - redis
+      - ldap
+    environment:
+      - OWNCLOUD_DB_TYPE=mysql
+      - OWNCLOUD_DB_HOST=owncloud_mariadb
+      - OWNCLOUD_DB_NAME=${MYSQL_DATABASE}
+      - OWNCLOUD_DB_USERNAME=${MYSQL_USER}
+      - OWNCLOUD_DB_PASSWORD=${MYSQL_PASSWORD}
+      - OWNCLOUD_ADMIN_USERNAME=${ADMIN_USERNAME}
+      - OWNCLOUD_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - OWNCLOUD_REDIS_HOST=owncloud_redis
+      - OWNCLOUD_LDAP_BASE_DN=${LDAP_BASE_DN}
+      - OWNCLOUD_LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+
+      # Ajustes para evitar bucles de redirección y forzar que OwnCloud
+      # confíe en HAProxy en http://localhost:20260 (cambiado a 20268)
+      - OWNCLOUD_DOMAIN=localhost
+      - OWNCLOUD_TRUSTED_DOMAINS=localhost,127.0.0.1,localhost:20260,localhost:20268,localhost:20269,150.214.191.160:20267,150.214.191.160:20262,150.214.191.160:20268
+
+      - OWNCLOUD_OVERWRITEHOST=localhost:20268
+      - OWNCLOUD_OVERWRITEPROTOCOL=http
+      - OWNCLOUD_OVERWRITEWEBROOT=
+      - OWNCLOUD_OVERWRITECLIURL=http://localhost:20268
+
+    networks:
+      - owncloud_net_docker
+    volumes:
+      - files:/mnt/data
+
+  owncloud2:
+    image: owncloud/server:${OWNCLOUD_VERSION}
+    container_name: owncloud2
+    restart: always
+    ports:
+      - "20263:8080"  # HTTP OwnCloud (acceso directo, opcional)
+    depends_on:
+      - mariadb
+      - redis
+      - ldap
+    environment:
+      - OWNCLOUD_DB_TYPE=mysql
+      - OWNCLOUD_DB_HOST=owncloud_mariadb
+      - OWNCLOUD_DB_NAME=${MYSQL_DATABASE}
+      - OWNCLOUD_DB_USERNAME=${MYSQL_USER}
+      - OWNCLOUD_DB_PASSWORD=${MYSQL_PASSWORD}
+      - OWNCLOUD_ADMIN_USERNAME=${ADMIN_USERNAME}
+      - OWNCLOUD_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - OWNCLOUD_REDIS_HOST=owncloud_redis
+      - OWNCLOUD_LDAP_BASE_DN=${LDAP_BASE_DN}
+      - OWNCLOUD_LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+
+      # Mismos ajustes para OwnCloud2.
+      - OWNCLOUD_DOMAIN=localhost
+      - OWNCLOUD_TRUSTED_DOMAINS=localhost,127.0.0.1,localhost:20260,localhost:20268,localhost:20269,150.214.191.160:20263,150.214.191.160:20268
+      - OWNCLOUD_OVERWRITEHOST=localhost:20268
+      - OWNCLOUD_OVERWRITEPROTOCOL=http
+      - OWNCLOUD_OVERWRITEWEBROOT=
+      - OWNCLOUD_OVERWRITECLIURL=http://localhost:20268
+
+    networks:
+      - owncloud_net_docker
+    volumes:
+      - files:/mnt/data
+
+  mariadb:
+    image: mariadb:${MARIADB_VERSION}
+    container_name: owncloud_mariadb
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_REPLICATION_MODE=master
+      - MYSQL_REPLICATION_USER=repl_user
+      - MYSQL_REPLICATION_PASSWORD=repl_password
+    command: ["--max-allowed-packet=128M", "--innodb-log-file-size=64M"]
+    volumes:
+      - mysql:/var/lib/mysql
+    networks:
+      - owncloud_net_docker
+
+  mariadb_slave:
+    image: mariadb:${MARIADB_VERSION}
+    container_name: owncloud_mariadb_slave
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_REPLICATION_MODE=slave
+      - MYSQL_REPLICATION_USER=repl_user
+      - MYSQL_REPLICATION_PASSWORD=repl_password
+      - MYSQL_MASTER_HOST=owncloud_mariadb
+    command: ["--max-allowed-packet=128M", "--innodb-log-file-size=64M"]
+    depends_on:
+      - mariadb
+    volumes:
+      - mysql:/var/lib/mysql_slave
+    networks:
+      - owncloud_net_docker
+
+  redis:
+    image: redis:${REDIS_VERSION}
+    container_name: owncloud_redis
+    restart: always
+    command: ["--databases", "1"]
+    ports:
+      - "20266:6379"
+    volumes:
+      - redis:/data
+    networks:
+      - owncloud_net_docker
+
+  ldap:
+    image: osixia/openldap:1.5.0
+    container_name: owncloud_ldap_server
+    restart: always
+    command: "--copy-service"
+    environment:
+      - LDAP_DOMAIN=${LDAP_DOMAIN}
+      - LDAP_BASE_DN=${LDAP_BASE_DN}
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+    ports:
+      - "20264:389"  # LDAP sin cifrar
+      - "20265:636"  # LDAP cifrado
+    volumes:
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    networks:
+      - owncloud_net_docker
+networks:
+  owncloud_net_docker:
+    driver: bridge
+    name: owncloud_net_docker

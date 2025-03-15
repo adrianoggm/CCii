@@ -1,0 +1,14 @@
+dn: uid=adrianoggm,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: posixAccount
+objectClass: inetOrgPerson
+cn: Adrian Oggm
+sn: Oggm
+uid: adrianoggm
+uidNumber: 501
+gidNumber: 20
+homeDirectory: /home/adrianoggm
+loginShell: /bin/bash
+gecos: Adrian Oggm
+userPassword: {crypt}x
+mail: adrianoggm@example.com
