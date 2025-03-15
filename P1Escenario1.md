@@ -137,6 +137,7 @@ docker run --detach \
 Para simplificar el proceso anterior, se preparó un archivo docker-compose (docker-compose1.yml) ubicado en el directorio Escenario1. Docker Compose facilita la configuración y gestión simultánea de múltiples contenedores.
 
 A continuación, se presenta dicho archivo, donde se definen claramente todos los servicios anteriormente desplegados de forma individual con Docker, así como las redes y volúmenes para persistencia de datos:
+Observaremos que hay variables que vienen dadas por el fichero .env que contiene algunas variables de entorno.
 
 ``` docker-compose
     version: "3.8"
@@ -385,3 +386,9 @@ change-passwords:
         @echo "Contraseñas cambiadas correctamente."
 
 ```
+
+## Resultado 
+Con esto podemos entrar mediante la  ip designada del servidor en el puerto 20270 el servicio owncloud  y si entramos en la cuenta juanitoggm con contraseña juanito podremos ver una imagen subida de una armudura de zinogre que comprueba la presistencia de todo.
+
+Imagen de la cuenta de owncloud de Juanitoggm conn la imagen subida.
+![MV](/P1/images/owncloudpesc1.png)  
