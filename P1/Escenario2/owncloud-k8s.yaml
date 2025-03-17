@@ -1,0 +1,330 @@
+#############################################
+# 1. PersistentVolumeClaim para files
+#############################################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: files-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+#############################################
+# 2. PersistentVolumeClaim para MySQL
+#############################################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+#############################################
+# 3. PersistentVolumeClaim para Redis
+#############################################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+#############################################
+# 4. Deployment de ownCloud (2 réplicas)
+#############################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: owncloud
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: owncloud
+  template:
+    metadata:
+      labels:
+        app: owncloud
+    spec:
+      containers:
+      - name: owncloud
+        image: owncloud/server:10.12
+        ports:
+        - containerPort: 8080
+        - containerPort: 443
+        env:
+        - name: OWNCLOUD_DOMAIN
+          value: "150.214.191.160:20270"
+        - name: OWNCLOUD_TRUSTED_DOMAINS
+          value: "owncloud.local,localhost,150.214.191.160,150.214.191.160:20270,150.214.191.160:20268"
+        - name: OWNCLOUD_DB_TYPE
+          value: "mysql"
+        - name: OWNCLOUD_DB_NAME
+          value: "owncloud"
+        - name: OWNCLOUD_DB_USERNAME
+          value: "owncloud"
+        - name: OWNCLOUD_DB_PASSWORD
+          value: "owncloudpassword"
+        - name: OWNCLOUD_DB_HOST
+          value: "mariadb"
+        - name: OWNCLOUD_ADMIN_USERNAME
+          value: "admin"
+        - name: OWNCLOUD_ADMIN_PASSWORD
+          value: "adminpassword"
+        - name: OWNCLOUD_MYSQL_UTF8MB4
+          value: "true"
+        - name: OWNCLOUD_REDIS_ENABLED
+          value: "true"
+        - name: OWNCLOUD_REDIS_HOST
+          value: "redis"
+        volumeMounts:
+        - name: files-volume
+          mountPath: /mnt/data
+      volumes:
+      - name: files-volume
+        persistentVolumeClaim:
+          claimName: files-pvc
+---
+#############################################
+# 5. Service de ownCloud
+#############################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: owncloud
+spec:
+  type: NodePort
+  selector:
+    app: owncloud
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 20270
+  - name: https
+    port: 443
+    targetPort: 443
+    nodePort: 20271
+---
+#############################################
+# 6. Deployment de Redis
+#############################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:6.2
+        command: ["redis-server", "--databases", "1"]
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-volume
+          mountPath: /data
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: redis-volume
+        persistentVolumeClaim:
+          claimName: redis-pvc
+---
+#############################################
+# 7. Service de Redis
+#############################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  type: NodePort
+  selector:
+    app: redis
+  ports:
+  - name: redis-port
+    port: 6379
+    targetPort: 6379
+    nodePort: 20272
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ldap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ldap
+  template:
+    metadata:
+      labels:
+        app: ldap
+    spec:
+      securityContext:
+        runAsUser: 0
+      containers:
+      - name: ldap
+        image: osixia/openldap:1.4.0
+        env:
+        - name: LDAP_TLS_VERIFY_CLIENT
+          value: "never"
+        - name: LDAP_DOMAIN
+          value: "example.com"
+        - name: LDAP_BASE_DN
+          value: "dc=example,dc=com"
+        - name: LDAP_ADMIN_PASSWORD
+          value: "admin"
+        - name: LDAP_CONFIG_PASSWORD
+          value: "configadmin"
+        - name: LDAP_READONLY_USER
+          value: "true"
+        - name: LDAP_READONLY_USER_USERNAME
+          value: "readonly"
+        - name: LDAP_READONLY_USER_PASSWORD
+          value: "readonly-password"
+        - name: LDAP_USERS_PATH
+          value: "/home/adrianoggm"
+        - name: SLAPD_URLS
+          value: "ldap://0.0.0.0:389/ ldaps://0.0.0.0:636/"
+        - name: LDAP_CHOWN_DISABLE
+          value: "true"
+        ports:
+        - containerPort: 389
+        - containerPort: 636
+        volumeMounts:
+        - name: ldap-data
+          mountPath: /var/lib/ldap
+        - name: ldap-config
+          mountPath: /etc/ldap/slapd.d
+        - name: ldap-ldif
+          mountPath: /container/service/slapd/assets/config/bootstrap/ldif/custom
+      volumes:
+      - name: ldap-data
+        hostPath:
+          path: /home/adrianoggm/ldap/ldif-data
+          type: DirectoryOrCreate
+      - name: ldap-config
+        hostPath:
+          path: /home/adrianoggm/ldap/ldif-config
+          type: DirectoryOrCreate
+      - name: ldap-ldif
+        hostPath:
+          path: /home/adrianoggm/ldap/ldif
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldap
+spec:
+  type: NodePort
+  selector:
+    app: ldap
+  ports:
+  - name: ldap-port
+    port: 389
+    targetPort: 389
+    nodePort: 20260
+  - name: ldaps-port
+    port: 636
+    targetPort: 636
+    nodePort: 20261
+
+---
+#############################################
+# 10. Deployment de MariaDB
+#############################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:10.5
+        args: ["--max-allowed-packet=128M", "--innodb-log-file-size=64M"]
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "rootpassword"
+        - name: MYSQL_USER
+          value: "owncloud"
+        - name: MYSQL_PASSWORD
+          value: "owncloudpassword"
+        - name: MYSQL_DATABASE
+          value: "owncloud"
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-volume
+          mountPath: /var/lib/mysql
+        readinessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-u", "root", "--password=rootpassword"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-u", "root", "--password=rootpassword"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: mysql-volume
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+---
+#############################################
+# 11. Service de MariaDB
+#############################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+spec:
+  type: ClusterIP
+  selector:
+    app: mariadb
+  ports:
+  - name: mysql
+    port: 3306
+    targetPort: 3306

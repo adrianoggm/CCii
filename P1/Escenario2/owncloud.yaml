@@ -1,0 +1,236 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: files-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard  
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: owncloud-service
+spec:
+  selector:
+    app: owncloud
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-service
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldap-service
+spec:
+  selector:
+    app: ldap
+  ports:
+    - protocol: TCP
+      port: 389
+      targetPort: 389
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: owncloud-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: owncloud
+  template:
+    metadata:
+      labels:
+        app: owncloud
+    spec:
+      containers:
+      - name: owncloud
+        image: owncloud/server:10.12
+        env:
+        - name: OWNCLOUD_DOMAIN
+          value: localhost
+        - name: OWNCLOUD_TRUSTED_DOMAINS
+          value: localhost
+        - name: OWNCLOUD_DB_TYPE
+          value: mysql
+        - name: OWNCLOUD_DB_NAME
+          value: owncloud
+        - name: OWNCLOUD_DB_USERNAME
+          value: owncloud
+        - name: OWNCLOUD_DB_PASSWORD
+          value: owncloud
+        - name: OWNCLOUD_DB_HOST
+          value: mariadb
+        - name: OWNCLOUD_ADMIN_USERNAME
+          value: admin
+        - name: OWNCLOUD_ADMIN_PASSWORD
+          value: admin
+        - name: OWNCLOUD_MYSQL_UTF8MB4
+          value: "true"
+        - name: OWNCLOUD_REDIS_ENABLED
+          value: "true"
+        - name: OWNCLOUD_REDIS_HOST
+          value: redis
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: files-volume
+          mountPath: /mnt/data
+      volumes:
+      - name: files-volume
+        persistentVolumeClaim:
+          claimName: files-pvc
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:latest
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: owncloud
+        - name: MYSQL_USER
+          value: owncloud
+        - name: MYSQL_PASSWORD
+          value: owncloud
+        - name: MYSQL_DATABASE
+          value: owncloud
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-volume
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-volume
+        emptyDir: {}
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:latest
+        args: ["--databases", "1"]
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-volume
+          mountPath: /data
+      volumes:
+      - name: redis-volume
+        emptyDir: {}
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ldap-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ldap
+  template:
+    metadata:
+      labels:
+        app: ldap
+    spec:
+      containers:
+      - name: ldap
+        image: osixia/openldap:latest
+        args: ["--copy-service"]
+        env:
+        - name: LDAP_TLS_VERIFY_CLIENT
+          value: never
+        - name: LDAP_DOMAIN
+          value: modejota.com
+        - name: LDAP_BASE_DN
+          value: dc=modejota,dc=com
+        - name: LDAP_ADMIN_PASSWORD
+          value: admin
+        - name: LDAP_CONFIG_PASSWORD
+          value: config
+        - name: LDAP_READONLY_USER
+          value: "true"
+        - name: LDAP_READONLY_USER_USERNAME
+          value: readonly
+        - name: LDAP_READONLY_USER_PASSWORD
+          value: readonly-password
+        ports:
+        - containerPort: 389
+        volumeMounts:
+        - name: ldap-data-volume
+          mountPath: /var/lib/slapd
+        - name: ldap-config-volume
+          mountPath: /etc/ldap/slapd.d
+      volumes:
+      - name: ldap-data-volume
+        emptyDir: {}
+      - name: ldap-config-volume
+        emptyDir: {}

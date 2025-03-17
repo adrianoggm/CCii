@@ -157,11 +157,65 @@ Una vez completada la instalación, podemos configurar LDAP en OwnCloud siguiend
 
 Con estos pasos, tu entorno OwnCloud conectado a OpenLDAP estará completamente operativo.
 
-## Usando Docker-compose
-Para simplificar el proceso anterior, se preparó un archivo docker-compose (docker-compose1.yml) ubicado en el directorio Escenario1. Docker Compose facilita la configuración y gestión simultánea de múltiples contenedores.
+## Uso de Docker Compose
 
-A continuación, se presenta dicho archivo, donde se definen claramente todos los servicios anteriormente desplegados de forma individual con Docker, así como las redes y volúmenes para persistencia de datos:
-Observaremos que hay variables que vienen dadas por el fichero .env que contiene algunas variables de entorno.
+El archivo `docker-compose1.yml`, ubicado en el directorio **Escenario1**, se utiliza para definir y administrar múltiples contenedores de forma conjunta. Gracias a Docker Compose, se simplifica el proceso de despliegue, eliminando la necesidad de lanzar cada contenedor individualmente y permitiendo la reutilización de la configuración.
+
+## Características Principales
+
+### Volúmenes Locales
+
+Se definen volúmenes para la persistencia de datos en cada servicio, lo que permite mantener la información incluso si los contenedores se reinician o se eliminan. Entre ellos se incluyen:
+
+- **files**: para OwnCloud.
+- **mysql**: para MariaDB.
+- **redis**: para Redis.
+- **ldap-data** y **ldap-config**: para LDAP.
+
+### Red de Comunicación
+
+Se configura una red local llamada `owncloud_net`, basada en el driver `bridge`, para que todos los contenedores puedan comunicarse internamente sin exponer puertos innecesarios al exterior.
+
+### Servicios Definidos
+
+El archivo despliega los siguientes servicios:
+
+#### ownCloud
+
+- **Función**: Sirve la aplicación OwnCloud.
+- **Configuración**: Utiliza variables de entorno (provenientes del archivo `.env`) para definir el dominio, las credenciales de la base de datos y la administración.
+- **Healthchecks**: Establece healthchecks y expone puertos para HTTP y HTTPS.
+
+#### MariaDB
+
+- **Función**: Almacena los datos de OwnCloud.
+- **Configuración**: Define, a través de variables de entorno, el usuario, la contraseña y el nombre de la base de datos.
+- **Healthchecks**: Incluye healthchecks para asegurar su correcto funcionamiento.
+
+#### Redis
+
+- **Función**: Proporciona caché para OwnCloud.
+- **Configuración**: Expone el puerto correspondiente y define un healthcheck que utiliza el comando `redis-cli ping`.
+
+#### LDAP
+
+- **Función**: Gestiona el directorio de usuarios y la autenticación.
+- **Configuración**: Incluye variables de entorno para establecer el dominio, el DN base y las contraseñas.
+- **Persistencia**: Monta un volumen para la persistencia de la configuración y los datos.
+- **Puertos**: Expone los puertos para LDAP sin cifrado y con cifrado (LDAPS).
+
+## Uso de Variables de Entorno
+
+Muchas de las configuraciones, como las versiones de imágenes, credenciales y dominios, se toman del archivo `.env`. Esto permite modificar la configuración sin alterar directamente el archivo Docker Compose.
+
+## Healthchecks
+
+Cada servicio importante (OwnCloud, MariaDB, Redis) incluye definiciones de healthcheck que permiten monitorizar su estado y reiniciarlos automáticamente en caso de fallo.
+
+## Configuración Simplificada
+
+Gracias al uso de Docker Compose y las variables de entorno, no es necesario configurar archivos adicionales (por ejemplo, `config.php`) para cada despliegue. Esto facilita la eliminación y recreación de imágenes sin tener que volver a configurar manualmente la aplicación.
+
 
 ``` docker-compose
     version: "3.8"
@@ -279,6 +333,8 @@ services:
     networks:
       - owncloud_net
 ```
+Como configuramos todo por medio del dockerfile y sus variables de entorno no es necesario tener que configurar un archivo como config.php para la configuración del despliegue. Así  nos ahorramos tener que configurarlo cada vez que queremos borrar por completo una imagen.
+---
 Adicionalmente, he creado un **Makefile** que permite gestionar cómodamente diferentes acciones sobre los servicios desplegados. Este archivo automatiza y simplifica tareas como iniciar y detener los contenedores, gestionar múltiples escenarios con Docker Compose (`docker-compose1.yml` para el Escenario 1, `docker-compose2.yml` para el Escenario 2), así como tareas específicas relacionadas con LDAP (inicialización de la base, adición de usuarios, búsqueda y actualización de contraseñas).
 
 Los comandos (`targets`) del Makefile están claramente diferenciados según su función:
