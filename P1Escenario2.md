@@ -1,10 +1,22 @@
-# Escenario2
-## Usando Docker-compose
-Debido a la complejidad de este escenario, se preparó un archivo docker-compose(docker-compose2.yml) ubicado en el directorio Escenario2 directamente en vez de realizar todo el proceso mediante dockerdirectamente. Docker Compose facilita la configuración y gestión simultánea de múltiples contenedores.
+# Escenario 2: Uso de Docker Compose
 
-A continuación, se presenta dicho archivo, donde se definen claramente todos los servicios necesarios para este escenario hemos elegido las direcciones desde 20260-20269 para su despliegue para evitar posibles conflictos o configuraciones erroneas del anterior despliegue.
+---
 
-Además reutilizaremos los archivos de configuracion de LDAP y las carpetas sobre las que se montan LDAP y MARIA_DB para asegurar la persistencia.
+Debido a la complejidad de este escenario, se ha preparado un archivo **Docker Compose** (`docker-compose2.yml`) ubicado directamente en el directorio `Escenario2`. Esta solución evita la necesidad de gestionar manualmente cada contenedor, ya que Docker Compose facilita la configuración y el despliegue simultáneo de múltiples servicios.
+
+## Detalles del Despliegue
+
+- **Asignación de Puertos:**  
+  Se han reservado puertos en el rango **20260-20269** para evitar conflictos o configuraciones erróneas con implementaciones anteriores.
+
+- **Persistencia y Configuración:**  
+  - Se reutilizan los archivos de configuración de **LDAP**.  
+  - Se montan directorios específicos para **LDAP** y **MariaDB**, garantizando la persistencia de los datos.
+
+---
+
+Esta configuración proporciona un entorno robusto y escalable, permitiendo la orquestación eficiente de todos los servicios necesarios para este escenario.
+
 
 ``` docker-compose
 version: "3.8"
@@ -187,9 +199,23 @@ networks:
     driver: bridge
     name: owncloud_net_docker
 ```
-Observarmos como duplicamos el servicio de owncloud y el de mariadb para tener una copia de seguridad. Adicionalmente se usamos HaProxy para distribuir la carga. Mediante el siguiente fichero de configuración configuramos la distribución de la carga entre los diversos servicios owncloud esta se hace mediante la configuración fron-end y se distribuye el puerto 20268 hacia el :8080 el cual esta internamente mapeado por los dos servicios owncloud para escuchar de ahí. Y en el puerto 20267 podremos ver un desglose de las estadísticas que hemos ido recopilando en el servicio.
+---
 
-Como configuramos todo por medio del dockerfile y sus variables de entorno no es necesario tener que configurar un archivo como config.php para la configuración del despliegue. Así  nos ahorramos tener que configurarlo cada vez que queremos borrar por completo una imagen.
+## Características del Entorno
+
+- **Duplicación de Servicios para Respaldo y Alta Disponibilidad:**  
+  - **OwnCloud:** Se despliegan dos instancias (`owncloud1` y `owncloud2`), permitiendo la continuidad del servicio en caso de fallo en alguna de ellas.  
+  - **MariaDB:** Se configura un servidor maestro (`mariadb`) y un esclavo (`mariadb_slave`) para replicación y respaldo de datos.
+
+- **Balanceo de Carga con HAProxy:**  
+  - Se utiliza HAProxy para distribuir las solicitudes que llegan al puerto **20268** hacia el puerto **8080** interno, mapeado en ambas instancias de OwnCloud.  
+  - El puerto **20267** se reserva para acceder a las estadísticas de HAProxy, facilitando el monitoreo y análisis del tráfico.
+
+- **Persistencia y Configuración Automatizada:**  
+  - Se montan volúmenes locales para **LDAP**, **MariaDB** y **Redis**, asegurando la persistencia de datos entre reinicios o actualizaciones.  
+  - Gracias al uso de un Dockerfile y variables de entorno, no es necesario modificar manualmente archivos de configuración como `config.php`, simplificando el proceso de despliegue y mantenimiento.
+
+---
 
 ```haconfig
 global
@@ -373,3 +399,23 @@ Paralelamente, podemos consultar las **estadísticas de HAProxy** accediendo al 
 
 **Estadísticas de HAProxy en el puerto 20267:**  
 ![HaproxyStats](/P1/images/haproxystats.png)
+
+
+## Bibliografía
+Por aquí dejo un par de enlaces en los que me he basado para realizar la práctica.
+
+- **Configuración del Contenedor para el Servidor LDAP:**  
+  [Setting up OpenLDAP Server with Docker](https://medium.com/@amrutha_20595/setting-up-openldap-server-with-docker-d38781c259b2)  
+  Artículo en Medium que describe el proceso de implementación y configuración de un servidor LDAP utilizando Docker.
+
+- **Integración de OwnCloud con LDAP:**  
+  [OwnCloud LDAP Integration (Video)](https://www.youtube.com/watch?v=BOv-BSDcX3U)  
+  Video explicativo en YouTube sobre la integración de OwnCloud con un servidor LDAP.
+
+- **Configuración de HAProxy:**  
+  [HAProxy Configuration](https://github.com/yeasy/docker-compose-files/blob/master/haproxy_web/haproxy/haproxy.cfg)  
+  Archivo de configuración de HAProxy alojado en GitHub, que sirve como referencia para la configuración del balanceador de carga.
+
+- **Ejemplos de Docker Compose con HAProxy:**  
+  [HAProxy Docker Compose Examples](https://github.com/yeasy/docker-compose-files/blob/master/haproxy_web/docker-compose.yml)  
+  Ejemplos prácticos de Docker Compose que incluyen HAProxy, disponibles en el repositorio de GitHub.
