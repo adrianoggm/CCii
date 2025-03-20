@@ -2,21 +2,74 @@
 
 ---
 
-Debido a la complejidad de este escenario, se ha preparado un archivo **Docker Compose** (`docker-compose2.yml`) ubicado directamente en el directorio `Escenario2`. Esta solución evita la necesidad de gestionar manualmente cada contenedor, ya que Docker Compose facilita la configuración y el despliegue simultáneo de múltiples servicios.
+Para gestionar la complejidad de este escenario, se ha creado un archivo de configuración Docker Compose (`docker-compose2.yml`) ubicado en el directorio `Escenario2`. Esta solución elimina la necesidad de administrar manualmente cada contenedor, ya que Docker Compose permite configurar y desplegar de manera simultánea múltiples servicios.
 
 ## Detalles del Despliegue
 
 - **Asignación de Puertos:**  
-  Se han reservado puertos en el rango **20260-20269** para evitar conflictos o configuraciones erróneas con implementaciones anteriores.
+  Se han reservado los puertos del rango **20260-20269** para evitar conflictos con implementaciones previas y garantizar una asignación ordenada.
 
 - **Persistencia y Configuración:**  
-  - Se reutilizan los archivos de configuración de **LDAP**.  
-  - Se montan directorios específicos para **LDAP** y **MariaDB**, garantizando la persistencia de los datos.
+  - Se reutilizan los archivos de configuración de **LDAP** para mantener la coherencia del servicio.
+  - Se montan directorios específicos para **LDAP** y **MariaDB**, lo que asegura la persistencia de los datos incluso ante reinicios o recreaciones de contenedores.
 
 ---
 
-Esta configuración proporciona un entorno robusto y escalable, permitiendo la orquestación eficiente de todos los servicios necesarios para este escenario.
+Esta configuración ofrece un entorno robusto y escalable, facilitando la orquestación eficiente de todos los servicios requeridos en este escenario.
 
+## Balanceo de Carga
+
+Como parte de los requisitos de este escenario, se ha implementado un balanceador de carga para garantizar la duplicación de servicios críticos. En particular, se ha configurado el balanceo de carga para:
+
+- **OwnCloud:** Mejorando la disponibilidad y el rendimiento del servicio.
+- **Base de Datos:** Asegurando la redundancia y la capacidad de respuesta ante picos de demanda.
+
+Esta doble implementación permite optimizar los recursos y mejorar la resiliencia del entorno.
+
+---
+
+## Características del Entorno
+
+Basándonos en el docker-compose del Escenario 1, se han implementado mejoras significativas para optimizar el despliegue, garantizando alta disponibilidad, persistencia de datos y balanceo de carga. A continuación, se detalla lo que hace cada parte del entorno:
+
+### Duplicación de Servicios para Alta Disponibilidad
+
+- **OwnCloud:**  
+  Se despliegan dos instancias, `owncloud1` y `owncloud2`, para asegurar la continuidad del servicio. Si una instancia falla, la otra se hace cargo, lo que mejora la resiliencia y la experiencia del usuario.
+
+- **MariaDB:**  
+  Se configura un esquema maestro/esclavo:
+  - **Maestro (`mariadb`):** Proporciona la base de datos principal para OwnCloud.
+  - **Esclavo (`mariadb_slave`):** Replica los datos del maestro, ofreciendo respaldo y redundancia.
+
+### Balanceo de Carga con HAProxy
+
+- **Distribución de Solicitudes:**  
+  HAProxy se utiliza para repartir de forma equitativa las peticiones entrantes entre las instancias de OwnCloud.  
+  - **Puertos:**  
+    - El puerto **20268** se mapea al servicio HTTP interno de HAProxy.
+    - El puerto **20269** se utiliza para conexiones HTTPS, con un certificado SSL cargado desde `/etc/ssl/certs/haproxy.pem`.
+  - **Interfaz de Estadísticas:**  
+    - El puerto **20267** se reserva para acceder a la interfaz de estadísticas de HAProxy, lo que facilita el monitoreo en tiempo real del tráfico y el rendimiento del balanceador.
+
+### Persistencia y Configuración Automatizada
+
+- **Volúmenes Persistentes:**  
+  Se montan volúmenes locales para asegurar que los datos persistan entre reinicios o actualizaciones:
+  - **LDAP:** Guarda tanto la configuración como los datos del servidor LDAP.
+  - **MariaDB:** Utiliza volúmenes separados para el maestro y el esclavo, garantizando la continuidad y consistencia de la base de datos.
+  - **Redis:** Asegura la persistencia de la caché.
+  - **Certificados HAProxy:** Permite almacenar y reutilizar los certificados SSL de forma segura.
+
+- **Automatización mediante Variables y Dockerfile:**  
+  El uso de variables de entorno y un Dockerfile personalizado elimina la necesidad de modificar manualmente archivos de configuración (como `config.php`), simplificando el despliegue y el mantenimiento del entorno.
+
+### Configuración de Redes
+
+- **Red de Contenedores:**  
+  Todos los servicios se comunican a través de una red Docker personalizada (`owncloud_net_docker`) con el driver `bridge`. Esto facilita la comunicación interna, mejora la seguridad y aísla el entorno.
+
+---
 
 ``` docker-compose
 version: "3.8"
@@ -200,23 +253,40 @@ networks:
     name: owncloud_net_docker
 ```
 ---
+# Configuración de HAProxy para Balanceo de Carga
 
-## Características del Entorno
+Este archivo de configuración (`haproxy.cnf`) define la política que HAProxy empleará para distribuir el tráfico entrante de OwnCloud, asegurando una asignación equitativa y un monitoreo constante del servicio. A continuación, se detalla cada sección del archivo:
 
-- **Duplicación de Servicios para Respaldo y Alta Disponibilidad:**  
-  - **OwnCloud:** Se despliegan dos instancias (`owncloud1` y `owncloud2`), permitiendo la continuidad del servicio en caso de fallo en alguna de ellas.  
-  - **MariaDB:** Se configura un servidor maestro (`mariadb`) y un esclavo (`mariadb_slave`) para replicación y respaldo de datos.
+## Secciones del Archivo
 
-- **Balanceo de Carga con HAProxy:**  
-  - Se utiliza HAProxy para distribuir las solicitudes que llegan al puerto **20268** hacia el puerto **8080** interno, mapeado en ambas instancias de OwnCloud.  
-  - El puerto **20267** se reserva para acceder a las estadísticas de HAProxy, facilitando el monitoreo y análisis del tráfico.
+- **Global:**  
+  En esta sección se establece la configuración general del servicio, incluyendo la salida de logs a la salida estándar con un formato crudo y un nivel de detalle definido (local0 info).
 
-- **Persistencia y Configuración Automatizada:**  
-  - Se montan volúmenes locales para **LDAP**, **MariaDB** y **Redis**, asegurando la persistencia de datos entre reinicios o actualizaciones.  
-  - Gracias al uso de un Dockerfile y variables de entorno, no es necesario modificar manualmente archivos de configuración como `config.php`, simplificando el proceso de despliegue y mantenimiento.
+- **Defaults:**  
+  Se configuran los parámetros predeterminados para todas las conexiones HTTP:
+  - Modo de operación: `http`
+  - Uso de logs globales
+  - Tiempos de espera para conexiones, clientes, servidores y solicitudes HTTP, definidos en 15s, 20s y 20s respectivamente.
+  - Activación de la opción `httplog` para un registro detallado de las transacciones.
 
----
+- **Interfaz de Estadísticas:**  
+  Se crea un frontend (`stats`) en el puerto **20267** que permite acceder a una interfaz de estadísticas. Esta herramienta refresca los datos cada 10 segundos y facilita el monitoreo en tiempo real del rendimiento y estado de HAProxy.
 
+- **Frontend Principal para OwnCloud:**  
+  El frontend `owncloud_frontend` está configurado para:
+  - Escuchar en el puerto **20268** para tráfico HTTP.
+  - Escuchar en el puerto **20269** para tráfico HTTPS, utilizando un certificado SSL ubicado en `/etc/ssl/certs/haproxy.pem`.
+  
+  Todas las solicitudes recibidas se redirigen al backend correspondiente.
+
+- **Backend para OwnCloud:**  
+  La sección `owncloud_backend` implementa el balanceo de carga mediante la política **roundrobin**. Aquí se distribuyen las peticiones de manera equitativa entre dos réplicas:
+  - **owncloud1:** Escuchando en el puerto 8080.
+  - **owncloud2:** Escuchando en el puerto 8080.
+  
+  Se han configurado comprobaciones de salud (checks) para garantizar que solo los servidores activos reciban tráfico, especificando intervalos y condiciones para considerar una instancia como caída o recuperada.
+
+## Archivo de Configuración Completo
 ```haconfig
 global
   log stdout format raw local0 info

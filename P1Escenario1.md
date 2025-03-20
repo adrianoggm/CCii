@@ -5,9 +5,14 @@
 
 A continuación se detallan los pasos seguidos para realizar el despliegue del escenario 1 utilizando Docker.
 
-### Paso 1: Configuración del servicio LDAP
+# Paso 1: Configuración del servicio LDAP
 
-Primero se desplegó el servidor LDAP usando Docker para garantizar la persistencia de datos en caso de que el contenedor se elimine:
+Se desplegó el servidor LDAP utilizando Docker para asegurar la persistencia de los datos, incluso si el contenedor se elimina. Para lograrlo, se verificó que las rutas y carpetas sean correctas, en particular:
+
+- **Ruta de persistencia:** `/home/adrianoggm/data/slapd/database`
+
+Esta carpeta servirá como punto de montaje, garantizando que el servicio LDAP mantenga sus datos de forma persistente.
+
 
 ```bash
 docker run -p 20273:389 -p 20274:636 volume /home/adrianoggm/data/slapd/database:/var/lib/ldap --volume /home/adrianoggm/data/slapd/config:/etc/ldap/slapd.d --name openldap-server --detach osixia/openldap:1.5.0
@@ -39,6 +44,42 @@ Posteriormente, se añadió esta estructura al servidor LDAP con el comando:
 ```bash
 ldapadd -x -H ldap://localhost:20273 -D "cn=admin,dc=example,dc=com" -w admin -c -f base_dn.ldif
   ```
+# Estructura Organizativa del LDAP
+
+Con este archivo de configuración definimos la estructura organizativa de nuestro directorio LDAP. Se basa en el ejemplo de la práctica y establece una jerarquía clara para la administración de la organización.
+
+## Entrada Raíz
+
+- **DN:** `dc=example,dc=com`
+- **objectClass:** `top`, `dcObject`, `organization`
+- **Atributos:**
+  - **o:** Define el nombre de la organización. En este ejemplo se utiliza *Example Organization*.
+  - **dc:** Especifica el dominio, que en este caso es *example*.
+
+Esta entrada raíz establece el punto de partida para toda la estructura del directorio.
+
+## Unidades Organizativas
+
+Se definen dos unidades organizativas que facilitan la segregación y el manejo de los datos:
+
+### Usuarios
+
+- **DN:** `ou=users,dc=example,dc=com`
+- **objectClass:** `top`, `organizationalUnit`
+- **Atributo:**
+  - **ou:** Indica que esta unidad contiene a los usuarios del directorio.
+
+### Grupos
+
+- **DN:** `ou=groups,dc=example,dc=com`
+- **objectClass:** `top`, `organizationalUnit`
+- **Atributo:**
+  - **ou:** Designa que esta unidad se utiliza para agrupar a los usuarios en función de roles o criterios definidos.
+
+## Resumen
+
+Esta configuración establece una base sólida para el directorio LDAP, permitiendo separar y organizar de forma eficiente la información de usuarios y grupos. La estructura propuesta facilita tanto la administración diaria como futuras ampliaciones o ajustes en la organización.
+
 ### Paso 3: Añadir usuarios al servidor LDAP
 
 Se añadieron dos usuarios, `adrianoggm` y `juanitoggm`, utilizando definiciones LDIF (`usuarios.ldif`):
@@ -95,6 +136,7 @@ Para desplegar MariaDB, primero aseguramos que tenemos disponible la imagen más
 
 ```bash
 docker pull mariadb:latest
+```
 A continuación ejecutamos el siguiente comando para lanzar el contenedor MariaDB con persistencia de datos y variables de entorno necesarias para definir la base de datos, el usuario y su contraseña:
 
 ```bash
@@ -207,7 +249,36 @@ El archivo despliega los siguientes servicios:
 ## Uso de Variables de Entorno
 
 Muchas de las configuraciones, como las versiones de imágenes, credenciales y dominios, se toman del archivo `.env`. Esto permite modificar la configuración sin alterar directamente el archivo Docker Compose.
+``` .env
+# Configuración de OwnCloud
+OWNCLOUD_VERSION=10.12
+OWNCLOUD_DOMAIN=150.214.191.160:20270
+OWNCLOUD_TRUSTED_DOMAINS=owncloud.local,localhost,150.214.191.160,150.214.191.160:20270,150.214.191.160:20268
+HTTP_PORT=20270
+HTTPS_PORT=20271
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=adminpassword
 
+# Configuración de Base de Datos
+MARIADB_VERSION=10.5
+MYSQL_ROOT_PASSWORD=rootpassword
+MYSQL_USER=owncloud
+MYSQL_PASSWORD=owncloudpassword
+MYSQL_DATABASE=owncloud
+
+# Configuración de Redis
+REDIS_VERSION=6.2
+
+# Configuración de LDAP
+LDAP_DOMAIN=example.com
+LDAP_BASE_DN=dc=example,dc=com
+LDAP_ADMIN_PASSWORD=admin
+LDAP_CONFIG_PASSWORD=configadmin
+LDAP_NON_ENCRYPT_PORT=20260
+LDAP_ENCRYPT_PORT=20261
+LDAP_USERS_PATH=/home/adrianoggm
+```
+Es muy importante configurar correctamente los trusted domains ya que si no es propenso a no dejarte entrar desde ip's externas.
 ## Healthchecks
 
 Cada servicio importante (OwnCloud, MariaDB, Redis) incluye definiciones de healthcheck que permiten monitorizar su estado y reiniciarlos automáticamente en caso de fallo.
@@ -334,7 +405,7 @@ services:
       - owncloud_net
 ```
 Como configuramos todo por medio del dockerfile y sus variables de entorno no es necesario tener que configurar un archivo como config.php para la configuración del despliegue. Así  nos ahorramos tener que configurarlo cada vez que queremos borrar por completo una imagen.
----
+## Makefile
 Adicionalmente, he creado un **Makefile** que permite gestionar cómodamente diferentes acciones sobre los servicios desplegados. Este archivo automatiza y simplifica tareas como iniciar y detener los contenedores, gestionar múltiples escenarios con Docker Compose (`docker-compose1.yml` para el Escenario 1, `docker-compose2.yml` para el Escenario 2), así como tareas específicas relacionadas con LDAP (inicialización de la base, adición de usuarios, búsqueda y actualización de contraseñas).
 
 Los comandos (`targets`) del Makefile están claramente diferenciados según su función:
