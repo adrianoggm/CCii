@@ -1,0 +1,8 @@
+Algorithm,ModelPath,Accuracy
+rf,hdfs://namenode:8020/user/aggm000edu/models/rf_t10,0.761599
+rf,hdfs://namenode:8020/user/aggm000edu/models/rf_t50,0.75627
+rf,hdfs://namenode:8020/user/aggm000edu/models/rf_t100,0.754229
+lr,hdfs://namenode:8020/user/aggm000edu/models/lr_i5_r0.0,0.706812
+lr,hdfs://namenode:8020/user/aggm000edu/models/lr_i5_r0.1,0.701805
+lr,hdfs://namenode:8020/user/aggm000edu/models/lr_i20_r0.0,0.706892
+lr,hdfs://namenode:8020/user/aggm000edu/models/lr_i20_r0.1,0.701717
