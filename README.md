@@ -12,3 +12,4 @@ Cada práctica cuenta con instrucciones detalladas, comandos centralizados media
 
 > **Nota**: Actualmente, solo las  **Prácticas 1 y 2** se encuentran implementadas y disponibles.
 
+ .
